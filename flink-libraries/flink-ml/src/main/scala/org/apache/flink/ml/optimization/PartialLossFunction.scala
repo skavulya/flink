@@ -39,6 +39,7 @@ trait PartialLossFunction extends Serializable {
   def derivative(prediction: Double, label: Double): Double
 }
 
+
 /** Squared loss function which can be used with the [[GenericLossFunction]]
   *
   * The [[SquaredLoss]] function implements `1/2 (prediction - label)^2`
@@ -63,5 +64,56 @@ object SquaredLoss extends PartialLossFunction {
     */
   override def derivative(prediction: Double, label: Double): Double = {
     (prediction - label)
+  }
+}
+
+
+object LogisticLoss extends PartialLossFunction {
+  /** Calculates the loss for a given prediction/truth pair
+    *
+    * @param prediction The predicted value
+    * @param label The true value
+    */
+  override def loss(prediction: Double, label: Double): Double = {
+    val t = prediction * label
+    t match {
+      case t if t > 18 => return math.exp(-t)
+      case t if t < -18 => return -t
+    }
+    math.log(1 + math.exp(-t))
+  }
+
+  /** Calculates the derivative of the loss function with respect to the prediction
+    *
+    * @param prediction The predicted value
+    * @param label The true value
+    */
+  override def derivative(prediction: Double, label: Double): Double = {
+    (-label * math.exp(-label * prediction)) / (1 + math.exp(-label * prediction))
+  }
+}
+
+class HingeLoss extends PartialLossFunction {
+  /** Calculates the loss for a given prediction/truth pair
+    *
+    * @param prediction The predicted value
+    * @param label The true value
+    */
+  override def loss(prediction: Double, label: Double): Double = {
+
+    math.max(0, 1 - prediction * label)
+  }
+
+  /** Calculates the derivative of the loss function with respect to the prediction
+    *
+    * @param prediction The predicted value
+    * @param label The true value
+    */
+  override def derivative(prediction: Double, label: Double): Double = {
+    if (label * prediction < 1)
+      -label * prediction
+    else {
+      0
+    }
   }
 }

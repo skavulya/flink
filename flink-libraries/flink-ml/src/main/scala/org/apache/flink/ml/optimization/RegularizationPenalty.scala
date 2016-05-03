@@ -18,14 +18,8 @@
 
 package org.apache.flink.ml.optimization
 
-import breeze.linalg.{max => BreezeMax, norm => BreezeNorm}
-import breeze.numerics._
-import org.apache.flink.ml.math.Breeze._
-import org.apache.flink.ml.math.{BLAS, Vector => FlinkVector}
+import org.apache.flink.ml.math.{Vector, BLAS}
 
-
-
-// TODO(tvas): Change name to RegularizationPenalty?
 /** Represents a type of regularization penalty
   *
   * Regularization penalties are used to restrict the optimization problem to solutions with
@@ -36,33 +30,107 @@ import org.apache.flink.ml.math.{BLAS, Vector => FlinkVector}
   * where $\lambda$ is the regularization parameter used to tune the amount of regularization
   * applied.
   */
-abstract class RegularizationPenalty extends Serializable {
+trait RegularizationPenalty extends Serializable {
 
-  /** Updates the weights by taking a step according to the gradient and regularization applied
+  /** Calculates the new weights based on the gradient and regularization penalty
     *
-    * @param oldWeights The weights to be updated
+    * @param weightVector The weights to be updated
     * @param gradient The gradient according to which we will update the weights
-    * @param effectiveStepSize The effective step size for this iteration
-    * @param regParameter The regularization parameter to be applied in the case of L1
+    * @param regularizationConstant The regularization parameter to be applied in the case of L1
     *                     regularization
+    * @param learningRate The effective step size for this iteration
+    * @return Updated weights
     */
   def takeStep(
-      oldWeights: FlinkVector,
-      gradient: FlinkVector,
-      effectiveStepSize: Double,
-      regParameter: Double) {
-    BLAS.axpy(-effectiveStepSize, gradient, oldWeights)
-  }
+                weightVector: Vector,
+                gradient: Vector,
+                regularizationConstant: Double,
+                learningRate: Double
+                ): Vector
 
-  /** Adds regularization to the loss value **/
-  def regLoss(oldLoss: Double, weightVector: FlinkVector, regularizationParameter: Double): Double
-
+  //TODO(skavulya): Include method for adding regularization to loss value?
 }
 
+
+/** $L_2$ regularization penalty.
+  *
+  * Penalizes large weights, favoring solutions with more small weights rather than few large ones.
+  *
+  */
+object L2Regularization extends RegularizationPenalty {
+
+  /** Calculates the new weights based on the gradient and regularization penalty
+    *
+    * @param weightVector The weights to be updated
+    * @param gradient The gradient according to which we will update the weights
+    * @param regularizationConstant The regularization parameter to be applied in the case of L1
+    *                     regularization
+    * @param learningRate The effective step size for this iteration
+    * @return Updated weights
+    */
+  override def takeStep(
+                         weightVector: Vector,
+                         gradient: Vector,
+                         regularizationConstant: Double,
+                         learningRate: Double)
+  : Vector = {
+    // add the gradient of the L2 regularization
+    BLAS.axpy(regularizationConstant, weightVector, gradient)
+
+    // update the weights according to the learning rate
+    BLAS.axpy(-learningRate, gradient, weightVector)
+
+    weightVector
+  }
+}
+
+/** $L_1$ regularization penalty.
+  *
+  * The $L_1$ penalty can be used to drive a number of the solution coefficients to 0, thereby
+  * producing sparse solutions.
+  *
+  */
+object L1Regularization extends RegularizationPenalty {
+
+  /** Calculates the new weights based on the gradient and regularization penalty
+    *
+    * @param weightVector The weights to be updated
+    * @param gradient The gradient according to which we will update the weights
+    * @param regularizationConstant The regularization parameter to be applied in the case of L1
+    *                     regularization
+    * @param learningRate The effective step size for this iteration
+    * @return Updated weights
+    */
+  override def takeStep(
+                         weightVector: Vector,
+                         gradient: Vector,
+                         regularizationConstant: Double,
+                         learningRate: Double)
+  : Vector = {
+    // Update weight vector with gradient. L1 regularization has no gradient, the proximal operator
+    // does the job.
+    BLAS.axpy(-learningRate, gradient, weightVector)
+
+    // Apply proximal operator (soft thresholding)
+    val shrinkageVal = regularizationConstant * learningRate
+    var i = 0
+    while (i < weightVector.size) {
+      val wi = weightVector(i)
+      weightVector(i) = scala.math.signum(wi) *
+        scala.math.max(0.0, scala.math.abs(wi) - shrinkageVal)
+      i += 1
+    }
+
+    weightVector
+  }
+}
+
+//TODO(skavulya): Keep DiffRegularizationPenalty?
 /** Abstract class for regularization penalties that are differentiable
   *
   */
-abstract class DiffRegularizationType extends RegularizationPenalty {
+/*
+abstract class DiffRegularizationPenalty extends RegularizationPenalty {
 
   /** Compute the regularized gradient loss for the given data.
     * The provided cumGradient is updated in place.
@@ -88,82 +156,4 @@ abstract class DiffRegularizationType extends RegularizationPenalty {
       lossGradient: FlinkVector,
       regularizationParameter: Double)
 }
-
-/** Performs no regularization, equivalent to $R(w) = 0$ **/
-class NoRegularization extends RegularizationPenalty {
-  /** Adds regularization to the loss value **/
-  override def regLoss(oldLoss: Double, weightVector: FlinkVector, regularizationParameter: Double):
-  Double = {oldLoss}
-}
-
-/** $L_2$ regularization penalty.
-  *
-  * Penalizes large weights, favoring solutions with more small weights rather than few large ones.
-  *
-  */
-class L2Regularization extends DiffRegularizationType {
-
-  /** Adds regularization to the loss value **/
-  override def regLoss(oldLoss: Double, weightVector: FlinkVector, regParameter: Double)
-    : Double = {
-    val brzVector = weightVector.asBreeze
-    oldLoss + regParameter * (brzVector dot brzVector) / 2
-  }
-
-  /** Adds regularization gradient to the loss gradient. The gradient is updated in place **/
-  override def regGradient(
-      weightVector: FlinkVector,
-      lossGradient: FlinkVector,
-      regParameter: Double): Unit = {
-    BLAS.axpy(regParameter, weightVector, lossGradient)
-  }
-}
-
-/** $L_1$ regularization penalty.
-  *
-  * The $L_1$ penalty can be used to drive a number of the solution coefficients to 0, thereby
-  * producing sparse solutions.
-  *
-  */
-class L1Regularization extends RegularizationPenalty {
-  /** Calculates and applies the regularization amount and the regularization parameter
-    *
-    * Implementation was taken from the Apache Spark Mllib library:
-    * http://git.io/vfZIT
-    * @param oldWeights The old weights
-    * @param effectiveStepSize The effective step size for this iteration
-    * @param regParameter The current regularization parameter
-    * @return A tuple whose first element is the updated weight FlinkVector and the second is the
-    *         regularization value
-    */
-  override def takeStep(
-      oldWeights: FlinkVector,
-      gradient: FlinkVector,
-      effectiveStepSize: Double,
-      regParameter: Double) {
-    BLAS.axpy(-effectiveStepSize, gradient, oldWeights)
-    val brzWeights = oldWeights.asBreeze.toDenseVector
-
-    // Apply proximal operator (soft thresholding)
-    val shrinkageVal = regParameter * effectiveStepSize
-    var i = 0
-    while (i < brzWeights.length) {
-      val wi = brzWeights(i)
-      brzWeights(i) = signum(wi) * BreezeMax(0.0, abs(wi) - shrinkageVal)
-      i += 1
-    }
-
-    BLAS.copy(brzWeights.fromBreeze, oldWeights)
-
-    // We could maybe define a Breeze Universal function for the proximal operator, and test if it's
-    // faster that the for loop + copy above
-    //    brzWeights = signum(brzWeights) * max(0.0, abs(brzWeights) - shrinkageVal)
-
-  }
-
-  /** Adds regularization to the loss value **/
-  override def regLoss(oldLoss: Double, weightVector: FlinkVector, regularizationParameter: Double):
-  Double = {
-    oldLoss + BreezeNorm(weightVector.asBreeze, 1.0) * regularizationParameter
-  }
-}
+*/

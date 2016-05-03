@@ -18,12 +18,10 @@
 
 package org.apache.flink.ml.optimization
 
-import org.apache.flink.api.scala._
-import org.apache.flink.ml.math.{Vector => FlinkVector, BLAS}
-import org.apache.flink.ml.math.Breeze._
-
+import breeze.linalg.{max => BreezeMax, norm => BreezeNorm}
 import breeze.numerics._
-import breeze.linalg.{norm => BreezeNorm, max => BreezeMax}
+import org.apache.flink.ml.math.Breeze._
+import org.apache.flink.ml.math.{BLAS, Vector => FlinkVector}
 
 
 
@@ -38,7 +36,7 @@ import breeze.linalg.{norm => BreezeNorm, max => BreezeMax}
   * where $\lambda$ is the regularization parameter used to tune the amount of regularization
   * applied.
   */
-abstract class RegularizationType extends Serializable {
+abstract class RegularizationPenalty extends Serializable {
 
   /** Updates the weights by taking a step according to the gradient and regularization applied
     *
@@ -64,7 +62,7 @@ abstract class RegularizationType extends Serializable {
 /** Abstract class for regularization penalties that are differentiable
   *
   */
-abstract class DiffRegularizationType extends RegularizationType {
+abstract class DiffRegularizationType extends RegularizationPenalty {
 
   /** Compute the regularized gradient loss for the given data.
     * The provided cumGradient is updated in place.
@@ -92,7 +90,7 @@ abstract class DiffRegularizationType extends RegularizationType {
 }
 
 /** Performs no regularization, equivalent to $R(w) = 0$ **/
-class NoRegularization extends RegularizationType {
+class NoRegularization extends RegularizationPenalty {
   /** Adds regularization to the loss value **/
   override def regLoss(oldLoss: Double, weightVector: FlinkVector, regularizationParameter: Double):
   Double = {oldLoss}
@@ -127,7 +125,7 @@ class L2Regularization extends DiffRegularizationType {
   * producing sparse solutions.
   *
   */
-class L1Regularization extends RegularizationType {
+class L1Regularization extends RegularizationPenalty {
   /** Calculates and applies the regularization amount and the regularization parameter
     *
     * Implementation was taken from the Apache Spark Mllib library:

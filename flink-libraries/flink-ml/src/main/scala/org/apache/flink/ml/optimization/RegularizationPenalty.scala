@@ -42,11 +42,11 @@ trait RegularizationPenalty extends Serializable {
     * @return Updated weights
     */
   def takeStep(
-                weightVector: Vector,
-                gradient: Vector,
-                regularizationConstant: Double,
-                learningRate: Double
-                ): Vector
+      weightVector: Vector,
+      gradient: Vector,
+      regularizationConstant: Double,
+      learningRate: Double)
+    : Vector
 
   //TODO(skavulya): Include method for adding regularization to loss value?
 }
@@ -69,11 +69,11 @@ object L2Regularization extends RegularizationPenalty {
     * @return Updated weights
     */
   override def takeStep(
-                         weightVector: Vector,
-                         gradient: Vector,
-                         regularizationConstant: Double,
-                         learningRate: Double)
-  : Vector = {
+      weightVector: Vector,
+      gradient: Vector,
+      regularizationConstant: Double,
+      learningRate: Double)
+    : Vector = {
     // add the gradient of the L2 regularization
     BLAS.axpy(regularizationConstant, weightVector, gradient)
 
@@ -102,11 +102,11 @@ object L1Regularization extends RegularizationPenalty {
     * @return Updated weights
     */
   override def takeStep(
-                         weightVector: Vector,
-                         gradient: Vector,
-                         regularizationConstant: Double,
-                         learningRate: Double)
-  : Vector = {
+      weightVector: Vector,
+      gradient: Vector,
+      regularizationConstant: Double,
+      learningRate: Double)
+    : Vector = {
     // Update weight vector with gradient. L1 regularization has no gradient, the proximal operator
     // does the job.
     BLAS.axpy(-learningRate, gradient, weightVector)
@@ -124,36 +124,3 @@ object L1Regularization extends RegularizationPenalty {
     weightVector
   }
 }
-
-//TODO(skavulya): Keep DiffRegularizationPenalty?
-/** Abstract class for regularization penalties that are differentiable
-  *
-  */
-/*
-abstract class DiffRegularizationPenalty extends RegularizationPenalty {
-
-  /** Compute the regularized gradient loss for the given data.
-    * The provided cumGradient is updated in place.
-    *
-    * @param weightVector The current weight vector
-    * @param lossGradient The vector to which the gradient will be added to, in place.
-    * @return The regularized loss. The gradient is updated in place.
-    */
-  def regularizedLossAndGradient(
-      loss: Double,
-      weightVector: FlinkVector,
-      lossGradient: FlinkVector,
-      regularizationParameter: Double) : Double ={
-    val adjustedLoss = regLoss(loss, weightVector, regularizationParameter)
-    regGradient(weightVector, lossGradient, regularizationParameter)
-
-    adjustedLoss
-  }
-
-  /** Adds regularization gradient to the loss gradient. The gradient is updated in place **/
-  def regGradient(
-      weightVector: FlinkVector,
-      lossGradient: FlinkVector,
-      regularizationParameter: Double)
-}
-*/

@@ -24,17 +24,17 @@ package org.apache.flink.ml.optimization
 trait PartialLossFunction extends Serializable {
   /** Calculates the loss depending on the label and the prediction
     *
-    * @param prediction
-    * @param label
-    * @return
+    * @param prediction The predicted value
+    * @param label The true value
+    * @return The loss
     */
   def loss(prediction: Double, label: Double): Double
 
   /** Calculates the derivative of the [[PartialLossFunction]]
     * 
-    * @param prediction
-    * @param label
-    * @return
+    * @param prediction The predicted value
+    * @param label The true value
+    * @return The derivative of the loss function
     */
   def derivative(prediction: Double, label: Double): Double
 }
@@ -48,9 +48,9 @@ object SquaredLoss extends PartialLossFunction {
 
   /** Calculates the loss depending on the label and the prediction
     *
-    * @param prediction
-    * @param label
-    * @return
+    * @param prediction The predicted value
+    * @param label The true value
+    * @return The loss
     */
   override def loss(prediction: Double, label: Double): Double = {
     0.5 * (prediction - label) * (prediction - label)
@@ -58,9 +58,9 @@ object SquaredLoss extends PartialLossFunction {
 
   /** Calculates the derivative of the [[PartialLossFunction]]
     *
-    * @param prediction
-    * @param label
-    * @return
+    * @param prediction The predicted value
+    * @param label The true value
+    * @return The derivative of the loss function
     */
   override def derivative(prediction: Double, label: Double): Double = {
     (prediction - label)
@@ -68,39 +68,64 @@ object SquaredLoss extends PartialLossFunction {
 }
 
 
+/** Logistic loss function which can be used with the [[GenericLossFunction]]
+  *
+  *
+  * The [[LogisticLoss]] function implements `log(1 + exp(prediction*label))`
+  * for binary classification with label in {-1, 1}
+  */
 object LogisticLoss extends PartialLossFunction {
-  /** Calculates the loss for a given prediction/truth pair
+
+  /** Calculates the loss depending on the label and the prediction
     *
     * @param prediction The predicted value
     * @param label The true value
+    * @return The loss
     */
   override def loss(prediction: Double, label: Double): Double = {
-    val t = prediction * label
-    t match {
-      case t if t > 18 => return math.exp(-t)
-      case t if t < -18 => return -t
+    val z = prediction * label
+
+    z match {
+      // based on implementation in scikit-learn
+      // approximately equal and saves the computation of the log
+      case z if z > 18 => return math.exp(-z)
+      case z if z < -18 => return -z
     }
-    math.log(1 + math.exp(-t))
+    math.log(1 + math.exp(-z))
   }
 
   /** Calculates the derivative of the loss function with respect to the prediction
     *
     * @param prediction The predicted value
     * @param label The true value
+    * @return The derivative of the loss function
     */
   override def derivative(prediction: Double, label: Double): Double = {
-    (-label * math.exp(-label * prediction)) / (1 + math.exp(-label * prediction))
+    val z = prediction * label
+
+    z match {
+      // based on implementation in scikit-learn
+      // approximately equal and saves the computation of the log
+      case z if z > 18 => return -label * math.exp(-z)
+      case z if z < -18 => return -label
+    }
+    -label/(math.exp(z) + 1)
   }
 }
 
+/** Hinge loss function which can be used with the [[GenericLossFunction]]
+  *
+  * The [[HingeLoss]] function implements `max(0, 1 - prediction*label)`
+  * for binary classification with label in {-1, 1}
+  */
 class HingeLoss extends PartialLossFunction {
   /** Calculates the loss for a given prediction/truth pair
     *
     * @param prediction The predicted value
     * @param label The true value
+    * @return The loss
     */
   override def loss(prediction: Double, label: Double): Double = {
-
     math.max(0, 1 - prediction * label)
   }
 
@@ -108,10 +133,12 @@ class HingeLoss extends PartialLossFunction {
     *
     * @param prediction The predicted value
     * @param label The true value
+    * @return The derivative of the loss function
     */
   override def derivative(prediction: Double, label: Double): Double = {
-    if (label * prediction < 1)
+    if (label * prediction < 1) {
       -label * prediction
+    }
     else {
       0
     }

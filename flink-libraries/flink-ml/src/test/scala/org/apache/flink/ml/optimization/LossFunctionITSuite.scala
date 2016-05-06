@@ -48,4 +48,22 @@ class LossFunctionITSuite extends FlatSpec with Matchers with FlinkTestBase {
 
     gradient.weights(0) should be (4.0 +- 0.001)
   }
+
+  it should "calculate logistic loss and gradient correctly" in {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+
+    env.setParallelism(2)
+
+    val lossFunction = GenericLossFunction(LogisticLoss, LinearPrediction)
+
+    val example = LabeledVector(1.0, DenseVector(2))
+    val weightVector = new WeightVector(DenseVector(1.0), 1.0)
+
+    val gradient = lossFunction.gradient(example, weightVector)
+    val loss = lossFunction.loss(example, weightVector)
+
+    loss should be (2.0 +- 0.001)
+
+    gradient.weights(0) should be (4.0 +- 0.001)
+  }
 }

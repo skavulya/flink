@@ -39,7 +39,6 @@ trait PartialLossFunction extends Serializable {
   def derivative(prediction: Double, label: Double): Double
 }
 
-
 /** Squared loss function which can be used with the [[GenericLossFunction]]
   *
   * The [[SquaredLoss]] function implements `1/2 (prediction - label)^2`
@@ -67,7 +66,6 @@ object SquaredLoss extends PartialLossFunction {
   }
 }
 
-
 /** Logistic loss function which can be used with the [[GenericLossFunction]]
   *
   *
@@ -85,12 +83,15 @@ object LogisticLoss extends PartialLossFunction {
   override def loss(prediction: Double, label: Double): Double = {
     val z = prediction * label
 
-    z match {
-      // based on implementation in scikit-learn
-      // approximately equal and saves the computation of the log
-      case z if z > 18 => return math.exp(-z)
-      case z if z < -18 => return -z
+    // based on implementation in scikit-learn
+    // approximately equal and saves the computation of the log
+    if (z > 18) {
+      return math.exp(-z)
     }
+    else if (z < -18) {
+      return -z
+    }
+
     math.log(1 + math.exp(-z))
   }
 
@@ -103,12 +104,15 @@ object LogisticLoss extends PartialLossFunction {
   override def derivative(prediction: Double, label: Double): Double = {
     val z = prediction * label
 
-    z match {
-      // based on implementation in scikit-learn
-      // approximately equal and saves the computation of the log
-      case z if z > 18 => return -label * math.exp(-z)
-      case z if z < -18 => return -label
+    // based on implementation in scikit-learn
+    // approximately equal and saves the computation of the log
+    if (z > 18) {
+      return -label * math.exp(-z)
     }
+    else if (z < -18) {
+      return -label
+    }
+
     -label/(math.exp(z) + 1)
   }
 }
@@ -118,7 +122,7 @@ object LogisticLoss extends PartialLossFunction {
   * The [[HingeLoss]] function implements `max(0, 1 - prediction*label)`
   * for binary classification with label in {-1, 1}
   */
-class HingeLoss extends PartialLossFunction {
+object HingeLoss extends PartialLossFunction {
   /** Calculates the loss for a given prediction/truth pair
     *
     * @param prediction The predicted value
@@ -126,7 +130,8 @@ class HingeLoss extends PartialLossFunction {
     * @return The loss
     */
   override def loss(prediction: Double, label: Double): Double = {
-    math.max(0, 1 - prediction * label)
+    val z = prediction * label
+    math.max(0, 1 - z)
   }
 
   /** Calculates the derivative of the loss function with respect to the prediction
@@ -136,8 +141,9 @@ class HingeLoss extends PartialLossFunction {
     * @return The derivative of the loss function
     */
   override def derivative(prediction: Double, label: Double): Double = {
-    if (label * prediction < 1) {
-      -label * prediction
+    val z = prediction * label
+    if (z <= 1) {
+      -label
     }
     else {
       0

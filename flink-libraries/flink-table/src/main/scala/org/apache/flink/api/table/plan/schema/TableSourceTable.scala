@@ -27,6 +27,4 @@ class TableSourceTable(val tableSource: TableSource[_])
   extends FlinkTable[Row](
     typeInfo = new RowTypeInfo(tableSource.getFieldTypes, tableSource.getFieldsNames),
     fieldIndexes = 0.until(tableSource.getNumberOfFields).toArray,
-    fieldNames = tableSource.getFieldsNames.toArray) {
-
-}
+    fieldNames = tableSource.getFieldsNames)

@@ -18,18 +18,15 @@
 
 package org.apache.flink.graph.asm.translate;
 
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.types.LongValue;
 
 /**
  * Translate {@link LongValue} by adding a constant offset value.
  */
 public class LongValueAddOffset
-implements MapFunction<LongValue, LongValue> {
+implements TranslateFunction<LongValue, LongValue> {
 
 	private final long offset;
-
-	private LongValue output = new LongValue();
 
 	/**
 	 * Translate {@link LongValue} by adding a constant offset value.
@@ -41,9 +38,13 @@ implements MapFunction<LongValue, LongValue> {
 	}
 
 	@Override
-	public LongValue map(LongValue value)
+	public LongValue translate(LongValue value, LongValue reuse)
 			throws Exception {
-		output.setValue(offset + value.getValue());
-		return output;
+		if (reuse == null) {
+			reuse = new LongValue();
+		}
+
+		reuse.setValue(offset + value.getValue());
+		return reuse;
 	}
 }
